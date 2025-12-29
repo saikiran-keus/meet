@@ -10,10 +10,10 @@ import { ConnectionDetails } from '@/lib/types';
 import {
   formatChatMessageLinks,
   LocalUserChoices,
-  PreJoin,
   RoomContext,
   VideoConference,
 } from '@livekit/components-react';
+import { CustomPreJoin, ExtendedLocalUserChoices } from '@/lib/CustomPreJoin';
 import {
   ExternalE2EEKeyProvider,
   RoomOptions,
@@ -40,7 +40,7 @@ export function PageClientImpl(props: {
   hq: boolean;
   codec: VideoCodec;
 }) {
-  const [preJoinChoices, setPreJoinChoices] = React.useState<LocalUserChoices | undefined>(
+  const [preJoinChoices, setPreJoinChoices] = React.useState<ExtendedLocalUserChoices | undefined>(
     undefined,
   );
   const preJoinDefaults = React.useMemo(() => {
@@ -54,8 +54,26 @@ export function PageClientImpl(props: {
     undefined,
   );
 
-  const handlePreJoinSubmit = React.useCallback(async (values: LocalUserChoices) => {
+  const handlePreJoinSubmit = React.useCallback(async (values: ExtendedLocalUserChoices) => {
     setPreJoinChoices(values);
+    
+    // If token is provided, use it directly
+    if (values.token && values.token.trim()) {
+      if (!values.serverUrl || !values.serverUrl.trim()) {
+        throw new Error('Server URL is required when using a custom token');
+      }
+      
+      const connectionDetails: ConnectionDetails = {
+        serverUrl: values.serverUrl.trim(),
+        roomName: props.roomName,
+        participantName: values.username,
+        participantToken: values.token.trim(),
+      };
+      setConnectionDetails(connectionDetails);
+      return;
+    }
+    
+    // Otherwise, generate token using the API
     const url = new URL(CONN_DETAILS_ENDPOINT, window.location.origin);
     url.searchParams.append('roomName', props.roomName);
     url.searchParams.append('participantName', values.username);
@@ -65,14 +83,14 @@ export function PageClientImpl(props: {
     const connectionDetailsResp = await fetch(url.toString());
     const connectionDetailsData = await connectionDetailsResp.json();
     setConnectionDetails(connectionDetailsData);
-  }, []);
+  }, [props.roomName, props.region]);
   const handlePreJoinError = React.useCallback((e: any) => console.error(e), []);
 
   return (
     <main data-lk-theme="default" style={{ height: '100%' }}>
       {connectionDetails === undefined || preJoinChoices === undefined ? (
         <div style={{ display: 'grid', placeItems: 'center', height: '100%' }}>
-          <PreJoin
+          <CustomPreJoin
             defaults={preJoinDefaults}
             onSubmit={handlePreJoinSubmit}
             onError={handlePreJoinError}
@@ -90,7 +108,7 @@ export function PageClientImpl(props: {
 }
 
 function VideoConferenceComponent(props: {
-  userChoices: LocalUserChoices;
+  userChoices: ExtendedLocalUserChoices;
   connectionDetails: ConnectionDetails;
   options: {
     hq: boolean;
